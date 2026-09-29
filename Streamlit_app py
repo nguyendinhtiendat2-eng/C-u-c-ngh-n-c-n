@@ -1,0 +1,274 @@
+import random
+import time
+import pandas as pd
+import streamlit as st
+
+# Cấu hình trang với giao diện rộng (wide layout)
+st.set_page_config(
+    page_title="Hành Trình Cần Thủ - Streamlit Game",
+    page_icon="🎣",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ---------------------------------------------------------
+# 1. KHỞI TẠO DỮ LIỆU GAME (SESSION STATE)
+# ---------------------------------------------------------
+if "player_name" not in st.session_state:
+    st.session_state.player_name = ""
+if "score" not in st.session_state:
+    st.session_state.score = 0
+if "catch_count" not in st.session_state:
+    st.session_state.catch_count = 0
+if "logs" not in st.session_state:
+    st.session_state.logs = []
+if "inventory" not in st.session_state:
+    st.session_state.inventory = {}
+if "leaderboard" not in st.session_state:
+    # Dữ liệu bảng xếp hạng mẫu
+    st.session_state.leaderboard = [
+        {"Cần thủ": "Cao Thủ An", "Điểm": 150, "Cá đã câu": 12},
+        {"Cần thủ": "Bình " Cần Tốt "", "Điểm": 95, "Cá đã câu": 8},
+    ]
+
+# ---------------------------------------------------------
+# 2. HỘP HỘI THOẠI NHẬP TÊN (STREAMLIT MODAL / DIALOG)
+# ---------------------------------------------------------
+# Nếu chưa có tên người chơi, dùng st.dialog để hiện bảng nhập tên chuyên nghiệp
+if not st.session_state.player_name:
+
+    @st.dialog("🎣 Chào Mừng Đến Với Bến Câu!")
+    def set_player_dialog():
+        st.write(
+            "Hãy nhập danh xưng cần thủ của bạn để chuẩn bị ra khơi săn cá lớn!"
+        )
+        name = st.text_input(
+            "Tên cần thủ:", placeholder="Ví dụ: Đạt Sát Cá", key="temp_name"
+        )
+
+        if st.button("🚀 Ra Khơi Ngay", type="primary", use_container_width=True):
+            if name.strip():
+                st.session_state.player_name = name.strip()
+                st.rerun()
+            else:
+                st.warning("Vui lòng nhập tên để tiếp tục!")
+
+    set_player_dialog()
+    st.info("💡 Hãy nhập tên ở bảng thông báo để bắt đầu chơi.")
+    st.stop()
+
+# ---------------------------------------------------------
+# 3. SIDEBAR: THÔNG TIN CẦN THỦ & ÂM THANH
+# ---------------------------------------------------------
+with st.sidebar:
+    st.title("⚙️ Bảng Điều Tỉnh")
+
+    # Hiển thị thẻ người chơi
+    with st.container(border=True):
+        st.markdown(f"### 👤 {st.session_state.player_name}")
+        st.caption("Cần thủ chính thức")
+
+    st.subheader("🎵 Trình Phát Âm Thanh")
+    audio_type = st.radio(
+        "Nguồn nhạc nền:",
+        ["File cục bộ (background_music.mp3)", "Link trực tuyến (URL)"],
+    )
+
+    if audio_type == "File cục bộ (background_music.mp3)":
+        try:
+            with open("background_music.mp3", "rb") as f:
+                st.audio(f.read(), format="audio/mp3", loop=True)
+        except FileNotFoundError:
+            st.caption("⚠️ Chưa tìm thấy file `background_music.mp3` trong thư mục.")
+    else:
+        url = st.text_input(
+            "Dán đường link nhạc mp3:",
+            value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        )
+        if url:
+            st.audio(url, format="audio/mp3")
+
+    st.divider()
+
+    # Nút chơi lại
+    if st.button("🔄 Đổi Tên / Chơi Lại", use_container_width=True):
+        # Cập nhật kết quả vào Bảng xếp hạng trước khi reset
+        if st.session_state.score > 0:
+            st.session_state.leaderboard.append(
+                {
+                    "Cần thủ": st.session_state.player_name,
+                    "Điểm": st.session_state.score,
+                    "Cá đã câu": st.session_state.catch_count,
+                }
+            )
+        st.session_state.player_name = ""
+        st.session_state.score = 0
+        st.session_state.catch_count = 0
+        st.session_state.logs = []
+        st.session_state.inventory = {}
+        st.rerun()
+
+# ---------------------------------------------------------
+# 4. THÂN TRANG BẮT ĐẦU: HIỂN THỊ CHỈ SỐ BẰNG METRICS
+# ---------------------------------------------------------
+st.title("🌊 Hành Trình Cần Thủ")
+
+# Hiển thị số liệu dạng thẻ (Metrics)
+col_m1, col_m2, col_m3 = st.columns(3)
+col_m1.metric(label="🏆 Tổng Điểm Số", value=f"{st.session_state.score} pt")
+col_m2.metric(label="🐟 Cá Đã Câu", value=f"{st.session_state.catch_count} con")
+col_m3.metric(
+    label="🎒 Loại Cá Trong Túi", value=f"{len(st.session_state.inventory)} loại"
+)
+
+st.divider()
+
+# ---------------------------------------------------------
+# 5. GIAO DIỆN CHÍNH DÙNG TABS (BỒI CÂU, TÚI ĐỒ, BẢNG XẾP HẠNG)
+# ---------------------------------------------------------
+tab_game, tab_bag, tab_board = st.tabs(
+    ["🎣 Khu Vực Câu Cá", "🎒 Túi Đồ & Lịch Sử", "🏆 Bảng Xếp Hạng"]
+)
+
+# --- TAB 1: KHU VỰC CÂU CÁ ---
+with tab_game:
+    c_left, c_right = st.columns([2, 1])
+
+    # Danh sách URL ảnh minh họa
+    IMG_IDLE = "https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=700"
+    GIF_WAITING = "https://media.giphy.com/media/3o7abeG5620M3y95vO/giphy.gif"
+    GIF_FISH = "https://media.giphy.com/media/l1J9I5K3C_I52jP_a/giphy.gif"
+    GIF_JUNK = "https://media.giphy.com/media/26hkhPJ5hzd46K_68/giphy.gif"
+
+    with c_left:
+        with st.container(border=True):
+            img_box = st.empty()
+            img_box.image(
+                IMG_IDLE,
+                caption="Mặt hồ yên ả, sẵn sàng quăng mồi...",
+                use_container_width=True,
+            )
+
+            # Nút thả câu lớn
+            if st.button(
+                "🎯 QUĂNG CẦN CÂU!", type="primary", use_container_width=True
+            ):
+                # 1. Đổi hình ảnh sang GIF thả câu
+                img_box.image(
+                    GIF_WAITING,
+                    caption="Dây câu đang chìm xuống nước...",
+                    use_container_width=True,
+                )
+
+                # 2. Thanh tiến trình (Progress bar) tăng độ hồi hộp
+                prog_bar = st.progress(0, text="Đang chờ cá cắn mồi...")
+                for percent_complete in range(100):
+                    time.sleep(0.02)
+                    prog_bar.progress(
+                        percent_complete + 1, text="Đang chờ cá cắn mồi..."
+                    )
+                prog_bar.empty()
+
+                # 3. Tính toán kết quả
+                outcome = random.choices(
+                    ["fish", "junk", "nothing"], weights=[0.6, 0.25, 0.15]
+                )[0]
+
+                if outcome == "fish":
+                    f_type, f_pts = random.choice(
+                        [
+                            ("Cá Rô Phi", 5),
+                            ("Cá Chép Vàng", 10),
+                            ("Cá Ngừ Đại Dương", 20),
+                            ("Cá Mập Cảnh", 35),
+                            ("Rồng Biển Huyền Thoại", 100),
+                        ]
+                    )
+
+                    st.session_state.score += f_pts
+                    st.session_state.catch_count += 1
+                    st.session_state.inventory[f_type] = (
+                        st.session_state.inventory.get(f_type, 0) + 1
+                    )
+                    st.session_state.logs.insert(
+                        0, f"🎉 Câu thành công: **{f_type}** (+{f_pts} điểm)"
+                    )
+
+                    img_box.image(
+                        GIF_FISH,
+                        caption=f"ĐỈNH CỦA CHÓP! Trúng {f_type}!",
+                        use_container_width=True,
+                    )
+                    st.balloons()  # Hiệu ứng bong bóng mừng chiến thắng
+                    st.success(f"Dính cá rồi! Bạn bắt được **{f_type}** (+{f_pts} điểm).")
+
+                    # Phát âm thanh ngắn giật cá
+                    try:
+                        with open("catch_sound.mp3", "rb") as sf:
+                            st.audio(
+                                sf.read(), format="audio/mp3", autoplay=True
+                            )
+                    except FileNotFoundError:
+                        pass
+
+                elif outcome == "junk":
+                    st.session_state.logs.insert(
+                        0, "👞 Kéo lên một chiếc giày rách!"
+                    )
+                    img_box.image(
+                        GIF_JUNK,
+                        caption="Ủa rồi câu gì đây?",
+                        use_container_width=True,
+                    )
+                    st.error("Rất tiếc! Bạn chỉ câu lên được chiếc giày cũ.")
+
+                else:
+                    st.session_state.logs.insert(0, "🌊 Cá xào mồi bơi mất.")
+                    img_box.image(
+                        IMG_IDLE, caption="Cá né mồi rồi!", use_container_width=True
+                    )
+                    st.info("Cá đã ăn sạch mồi và lặn mất hút...")
+
+    with c_right:
+        st.subheader("📜 Nhật ký vội")
+        with st.container(height=300):
+            if not st.session_state.logs:
+                st.write("Chưa có chuyển động nào...")
+            for item in st.session_state.logs:
+                st.write(item)
+
+# --- TAB 2: TÚI ĐỒ & CHI TIẾT ---
+with tab_bag:
+    st.subheader("🎒 Chi Tiết Cá Đã Bắt Được")
+    if not st.session_state.inventory:
+        st.info("Túi đồ đang trống. Hãy đi câu để lấp đầy túi!")
+    else:
+        # Chuyển đổi dữ liệu túi đồ thành DataFrame để hiển thị dạng Bảng (Table)
+        df_inv = pd.DataFrame(
+            list(st.session_state.inventory.items()),
+            columns=["Loại Cá", "Số Lượng"],
+        )
+        st.dataframe(df_inv, use_container_width=True, hide_index=True)
+
+# --- TAB 3: BẢNG XẾP HẠNG ---
+with tab_board:
+    st.subheader("🏆 Bảng Vinh Danh Cần Thủ")
+
+    # Chuyển đổi Bảng xếp hạng thành DataFrame Streamlit
+    df_board = pd.DataFrame(st.session_state.leaderboard)
+    df_board = df_board.sort_values(
+        by="Điểm", ascending=False
+    )  # Sắp xếp từ cao xuống thấp
+
+    # Hiển thị bảng bằng st.dataframe
+    st.dataframe(
+        df_board,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Điểm": st.column_config.NumberColumn("Số Điểm", format="%d pt"),
+            "Cá đã câu": st.column_config.NumberColumn(
+                "Tổng Cá", format="%d con"
+            ),
+        },
+    )
