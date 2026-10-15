@@ -1,0 +1,536 @@
+import streamlit as st
+import base64
+import os
+
+st.set_page_config(
+    page_title="Game Câu Cá - Sông Nước Quê Hương", 
+    page_icon="🎣", 
+    layout="centered"
+)
+
+def get_audio_base64(file_path):
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as audio_file:
+                return base64.b64encode(audio_file.read()).decode()
+    except Exception:
+        pass
+    return None
+
+if "screen" not in st.session_state:
+    st.session_state.screen = "select"
+if "player_name" not in st.session_state:
+    st.session_state.player_name = "Cần thủ"
+if "character" not in st.session_state:
+    st.session_state.character = {"name": "Bác nông dân", "avatar": "👨‍🌾", "color": "#c0392b"}
+if "game_duration" not in st.session_state:
+    st.session_state.game_duration = 40
+if "difficulty" not in st.session_state:
+    st.session_state.difficulty = "Vừa"
+if "enable_music" not in st.session_state:
+    st.session_state.enable_music = True
+
+CHARACTERS = [
+    {"name": "Nông dân", "avatar": "👨‍🌾", "color": "#c0392b"},
+    {"name": "Mèo", "avatar": "🐱", "color": "#e67e22"},
+    {"name": "Cậu bé", "avatar": "👦", "color": "#2980b9"}
+]
+
+st.markdown("""
+    <style>
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        color: #ffffff;
+    }
+    .main-title {
+        text-align: center;
+        font-size: 30px;
+        font-weight: 900;
+        color: #38bdf8;
+        text-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+        margin-bottom: 0px;
+    }
+    .sub-title {
+        text-align: center;
+        font-size: 14px;
+        color: #94a3b8;
+        letter-spacing: 2px;
+        margin-bottom: 20px;
+    }
+    .section-label {
+        text-align: center;
+        font-size: 15px;
+        font-weight: bold;
+        color: #cbd5e1;
+        margin: 12px 0 6px 0;
+        letter-spacing: 1px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- MÀN HÌNH 1: CÀI ĐẶT TRẬN ĐẤU & GIAO DIỆN CHỦ ĐỀ CÂU CÁ ---
+if st.session_state.screen == "select":
+    st.markdown("<div class='main-title'>🌊 SÔNG NƯỚC QUÊ HƯƠNG 🌊</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-title'>🎣 ĐẠI CHIẾN CÂU CÁ 🎣</div>", unsafe_allow_html=True)
+
+    st.session_state.player_name = st.text_input("👤 Tên cần thủ:", value=st.session_state.player_name)
+
+    st.markdown("<div class='section-label'>🎵 ÂM NHẠC NỀN</div>", unsafe_allow_html=True)
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        if st.button("🎵 Bật Nhạc", use_container_width=True, type="primary" if st.session_state.enable_music else "secondary"):
+            st.session_state.enable_music = True
+            st.rerun()
+    with col_m2:
+        if st.button("🔇 Tắt Nhạc", use_container_width=True, type="primary" if not st.session_state.enable_music else "secondary"):
+            st.session_state.enable_music = False
+            st.rerun()
+
+    col_time_left, col_diff_right = st.columns(2)
+    
+    with col_time_left:
+        st.markdown("<div class='section-label'>⏱️ THỜI GIAN (GIÂY)</div>", unsafe_allow_html=True)
+        durations = [20, 30, 40, 60, 90]
+        curr_idx = durations.index(st.session_state.game_duration) if st.session_state.game_duration in durations else 2
+        st.session_state.game_duration = st.selectbox(
+            "Thời gian trận đấu:",
+            options=durations,
+            index=curr_idx,
+            label_visibility="collapsed"
+        )
+
+    with col_diff_right:
+        st.markdown("<div class='section-label'>⚡ ĐỘ KHÓ</div>", unsafe_allow_html=True)
+        diffs = ["Dễ", "Vừa", "Khó"]
+        curr_diff_idx = diffs.index(st.session_state.difficulty) if st.session_state.difficulty in diffs else 1
+        st.session_state.difficulty = st.selectbox(
+            "Mức độ khó:",
+            options=diffs,
+            index=curr_diff_idx,
+            label_visibility="collapsed"
+        )
+
+    st.markdown("<div class='section-label'>👨‍🌾 CHỌN CẦN THỦ</div>", unsafe_allow_html=True)
+    c_col1, c_col2, c_col3 = st.columns(3)
+    for i, char in enumerate(CHARACTERS):
+        with [c_col1, c_col2, c_col3][i]:
+            is_selected = (st.session_state.character["name"] == char["name"])
+            btn_label = f"{char['avatar']} {char['name']}"
+            if st.button(btn_label, use_container_width=True, type="primary" if is_selected else "secondary"):
+                st.session_state.character = char
+                st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if st.button("🚀 BẮT ĐẦU CÂU CÁ 🎣", use_container_width=True, type="primary"):
+        st.session_state.screen = "playing"
+        st.rerun()
+
+# --- MÀN HÌNH 2: GIAO DIỆN GAME CHÍNH ---
+elif st.session_state.screen == "playing":
+    player_name = st.session_state.player_name if st.session_state.player_name else "Cần thủ"
+    st.title("🌊 Sông Nước Quê Hương")
+    st.write(f"💡 **{player_name}** ({st.session_state.character['avatar']} {st.session_state.character['name']}) | Thời gian: **{st.session_state.game_duration}s** | Độ khó: **{st.session_state.difficulty}**")
+
+    audio_b64 = get_audio_base64("Sandwich and story.mp3")
+    if st.session_state.enable_music:
+        if audio_b64:
+            st.audio(f"data:audio/mp3;base64,{audio_b64}", format="audio/mp3", autoplay=True, loop=True)
+        else:
+            st.warning("⚠️ Đang bật nhạc nhưng chưa tìm thấy file 'Sandwich and story.mp3' trong thư mục dự án!")
+
+    char_avatar = st.session_state.character['avatar']
+    boat_color = st.session_state.character['color']
+    duration_val = int(st.session_state.game_duration)
+    
+    diff_setting = st.session_state.difficulty
+    if diff_setting == "Dễ":
+        speed_mul = 2.2
+    elif diff_setting == "Khó":
+        speed_mul = 4.8
+    else:
+        speed_mul = 3.4
+
+    html_code = """
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {
+                margin: 0;
+                background: #1e272e;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                font-family: Arial, sans-serif;
+            }
+            .game-wrapper {
+                position: relative;
+                cursor: pointer;
+                outline: none;
+            }
+            canvas {
+                background: linear-gradient(to bottom, #dff9fb 0%, #74b9ff 28%, #0984e3 28%, #00cec9 100%);
+                border-radius: 12px;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+                touch-action: none;
+            }
+            .hud {
+                position: absolute;
+                top: 10px;
+                left: 15px;
+                color: white;
+                font-size: 15px;
+                font-weight: bold;
+                text-shadow: 1px 1px 2px black;
+                z-index: 10;
+                pointer-events: none;
+            }
+            .score-badge {
+                position: absolute;
+                top: 8px;
+                right: 15px;
+                background: #f43f5e;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 15px;
+                font-size: 15px;
+                font-weight: bold;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                z-index: 10;
+                pointer-events: none;
+            }
+            #scoreModal {
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+                text-align: center;
+                z-index: 100;
+                width: 320px;
+            }
+            #scoreModal h2 {
+                color: #2c3e50;
+                margin-top: 0;
+            }
+            #scoreModal p {
+                font-size: 18px;
+                color: #e74c3c;
+                font-weight: bold;
+            }
+            .modal-btn {
+                background: #27ae60;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 16px;
+                font-weight: bold;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-top: 10px;
+            }
+            .modal-btn:hover {
+                background: #219653;
+            }
+            .on-screen-controls {
+                display: flex;
+                gap: 8px;
+                margin-top: 8px;
+                justify-content: center;
+                width: 750px;
+            }
+            .virtual-btn {
+                width: 110px;
+                background: #38bdf8;
+                color: #0f172a;
+                border: none;
+                padding: 8px 12px;
+                font-size: 13px;
+                font-weight: bold;
+                border-radius: 6px;
+                cursor: pointer;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
+            .virtual-btn:active {
+                transform: scale(0.95);
+                background: #0284c7;
+            }
+            .btn-drop {
+                width: 130px;
+                background: #f43f5e;
+                color: white;
+            }
+            .btn-drop:active {
+                background: #e11d48;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="game-wrapper" id="gameWrapper">
+            <div class="hud" id="hudText">Thời gian: VAR_DURATIONs</div>
+            <div class="score-badge" id="scoreBadge">🏆 Điểm: 0</div>
+            <canvas id="gameCanvas" width="750" height="450" tabindex="0"></canvas>
+            
+            <div id="scoreModal">
+                <h2>🏆 KẾT THÚC TRẬN CÂU 🎣</h2>
+                <p>Cần thủ: VAR_PLAYER_NAME</p>
+                <p>Tổng điểm: <span id="finalScore">0</span> điểm</p>
+                <p style="font-size: 14px; color: #7f8c8d;">Chuyến đi câu đã hoàn tất!</p>
+                <button class="modal-btn" onclick="location.reload()">Chơi lại ngay 🔄</button>
+            </div>
+        </div>
+
+        <div class="on-screen-controls">
+            <button class="virtual-btn" onclick="moveLeft()">◀ Trái</button>
+            <button class="virtual-btn btn-drop" onclick="actionDrop()">🎣 Thả Cần</button>
+            <button class="virtual-btn" onclick="moveRight()">Phải ▶</button>
+        </div>
+
+        <script>
+            const BOAT_COLOR = 'VAR_BOAT_COLOR';
+            const CHAR_AVATAR = 'VAR_CHAR_AVATAR';
+            const SPEED_MUL = VAR_SPEED_MUL;
+
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.focus();
+
+            let score = 0;
+            let timeLeft = VAR_DURATION;
+            let boatX = 375;
+            
+            let hookState = 'IDLE';
+            let hookY = 100;
+            const maxHookY = 410;
+            let caughtObject = null;
+            let waveOffset = 0;
+            let isGameOver = false;
+
+            // Danh sách bao gồm cá và vật vô giá trị (chiếc ủng cũ 🥾)
+            let objects = [
+                {type: 'fish', x: 50, y: 320, rx: 18, ry: 10, color: '#ff6b6b', speed: 2.2 * SPEED_MUL},
+                {type: 'fish', x: 700, y: 380, rx: 16, ry: 9, color: '#feca57', speed: -2.5 * SPEED_MUL},
+                {type: 'trash', x: 400, y: 350, rx: 15, ry: 15, color: '#7f8c8d', speed: -1.5 * SPEED_MUL},
+                {type: 'fish', x: 350, y: 410, rx: 20, ry: 12, color: '#48dbfb', speed: 2.4 * SPEED_MUL}
+            ];
+
+            const timer = setInterval(() => {
+                if (!isGameOver) {
+                    timeLeft--;
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                        isGameOver = true;
+                        document.getElementById('finalScore').innerText = score;
+                        document.getElementById('scoreModal').style.display = 'block';
+                    }
+                }
+            }, 1000);
+
+            function moveLeft() {
+                if (!isGameOver && boatX > 60) boatX -= 35;
+            }
+            function moveRight() {
+                if (!isGameOver && boatX < canvas.width - 60) boatX += 35;
+            }
+            
+            function actionDrop() {
+                if (!isGameOver && hookState === 'IDLE') {
+                    hookState = 'DOWN';
+                }
+            }
+
+            window.addEventListener('keydown', (e) => {
+                if (['ArrowLeft', 'KeyA'].includes(e.code) || e.key === 'ArrowLeft') {
+                    moveLeft();
+                    e.preventDefault();
+                }
+                if (['ArrowRight', 'KeyD'].includes(e.code) || e.key === 'ArrowRight') {
+                    moveRight();
+                    e.preventDefault();
+                }
+                if (['Space', 'ArrowDown', 'KeyS'].includes(e.code) || e.key === ' ') {
+                    actionDrop();
+                    e.preventDefault();
+                }
+            });
+
+            canvas.addEventListener('pointerdown', (e) => {
+                if (isGameOver) return;
+                const rect = canvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                if (clickY < 180) {
+                    actionDrop();
+                } else {
+                    if (clickX < canvas.width / 2) {
+                        moveLeft();
+                    } else {
+                        moveRight();
+                    }
+                }
+            });
+
+            function update() {
+                if (isGameOver) return;
+                waveOffset += 0.05;
+
+                if (hookState === 'DOWN') {
+                    hookY += 24;
+                    if (hookY >= maxHookY) {
+                        hookY = maxHookY;
+                        hookState = 'UP';
+                    }
+                    objects.forEach((obj, index) => {
+                        let dist = Math.hypot(boatX - obj.x, hookY - obj.y);
+                        if (dist < obj.rx + 12) {
+                            caughtObject = obj;
+                            objects.splice(index, 1);
+                            hookState = 'UP';
+                        }
+                    });
+                } 
+                else if (hookState === 'UP') {
+                    hookY -= 24;
+                    if (caughtObject) {
+                        caughtObject.x = boatX;
+                        caughtObject.y = hookY;
+                    }
+                    if (hookY <= 100) {
+                        if (caughtObject) {
+                            if (caughtObject.type === 'fish') {
+                                score += Math.round(50 / caughtObject.rx * 15);
+                            } else {
+                                // Vặt vô giá trị: không cộng điểm, thậm chí phạt trừ 10 điểm
+                                score = Math.max(0, score - 10);
+                            }
+                            caughtObject = null;
+                            
+                            // Tạo mới ngẫu nhiên cá hoặc rác
+                            let isTrashNext = Math.random() < 0.25;
+                            let baseSpeed = (Math.random() * 1.0 + 1.5) * SPEED_MUL;
+                            let finalSpeed = baseSpeed * (Math.random() < 0.5 ? 1 : -1);
+                            
+                            objects.push({
+                                type: isTrashNext ? 'trash' : 'fish',
+                                x: Math.random() < 0.5 ? -40 : canvas.width + 40,
+                                y: Math.random() * 100 + 300,
+                                rx: isTrashNext ? 14 : (Math.random() * 5 + 15),
+                                ry: isTrashNext ? 14 : (Math.random() * 3 + 8),
+                                color: isTrashNext ? '#7f8c8d' : ['#ff6b6b', '#feca57', '#ff9ff3', '#48dbfb', '#10ac84', '#e67e22'][Math.floor(Math.random()*6)],
+                                speed: finalSpeed
+                            });
+                        }
+                        hookState = 'IDLE';
+                        hookY = 100;
+                    }
+                }
+
+                objects.forEach(obj => {
+                    if (obj !== caughtObject) {
+                        obj.x += obj.speed;
+                        if (obj.x > canvas.width + 40) obj.speed = -Math.abs(obj.speed);
+                        if (obj.x < -40) obj.speed = Math.abs(obj.speed);
+                    }
+                });
+            }
+
+            function drawFish(x, y, rx, ry, color, speed, isCaught) {
+                ctx.save();
+                ctx.translate(x, y);
+                if (speed < 0 && !isCaught) {
+                    ctx.scale(-1, 1);
+                }
+                if (isCaught) {
+                    ctx.rotate(Math.PI / 2);
+                }
+
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(-rx, 0);
+                ctx.lineTo(-rx - 10, -ry - 3);
+                ctx.lineTo(-rx - 10, ry + 3);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(rx * 0.5, -ry * 0.3, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(rx * 0.5, -ry * 0.3, 1, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            function drawTrash(x, y, isCaught) {
+                ctx.save();
+                ctx.translate(x, y);
+                if (isCaught) {
+                    ctx.rotate(Math.PI / 2);
+                }
+                // Vẽ chiếc ủng cũ / rác vô giá trị
+                ctx.font = "24px Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("🥾", 0, 0);
+                ctx.restore();
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#2ecc71";
+                ctx.fillRect(0, 110, canvas.width, 18);
+
+                ctx.fillStyle = "#27ae60";
+                for (let i = 0; i < canvas.width; i += 35) {
+                    ctx.beginPath();
+                    ctx.arc(i, 114, 12, 0, Math.PI, true);
+                    ctx.fill();
+                }
+
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                ctx.lineWidth = 1.5;
+                for (let y = 140; y < canvas.height; y += 40) {
+                    ctx.beginPath();
+                    for (let x = 0; x < canvas.width; x += 30) {
+                        let waveY = y + Math.sin(x * 0.05 + waveOffset) * 3;
+                        if (x === 0) ctx.moveTo(x, waveY);
+                        else ctx.lineTo(x, waveY);
+                    }
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = "#b2bec3";
+                ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+                ctx.fillStyle = BOAT_COLOR;
+                ctx.beginPath();
+                ctx.moveTo(boatX - 40, 80);
+                ctx.lineTo(boatX + 40, 80);
+                ctx.lineTo(boatX + 25, 105);
+                ctx.lineTo(boatX - 25, 105);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = "white";
+                ctx.font = "bold 13px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("3", boatX, 98);
+
+                ctx.font = "22px Arial";
+            
